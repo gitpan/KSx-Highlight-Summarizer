@@ -1,0 +1,27 @@
+# http://module-build.sourceforge.net/META-spec.html
+#XXXXXXX This is a prototype!!!  It will change in the future!!! XXXXX#
+name:         KSx-Highlight-Summarizer
+version:      0.01
+version_from: lib/KSx/Highlight/Summarizer.pm
+installdirs:  site
+requires:
+    base:                          0
+    Hash::Util::FieldHash::Compat: 0
+    KinoSearch:                    0.2
+    KinoSearch::Analysis::Tokenizer: 0
+    KinoSearch::FieldSpec::text:   0
+    KinoSearch::Highlight::Encoder: 0
+    KinoSearch::Highlight::Highlighter: 0
+    KinoSearch::Highlight::SimpleHTMLFormatter: 0
+    KinoSearch::InvIndex:          0
+    KinoSearch::InvIndexer:        0
+    KinoSearch::Searcher:          0
+    KinoSearch::Store::RAMFolder:  0
+    List::Util:                    0
+    Number::Range:                 0
+    strict:                        0
+    Test::More:                    0
+    warnings:                      0
+
+distribution_type: module
+generated_by: ExtUtils::MakeMaker version 6.30

@@ -1,6 +1,6 @@
 package KSx::Highlight::Summarizer;
 
-$VERSION = '0.01';
+$VERSION = '0.02';
 
 @ISA = KinoSearch::Highlight::Highlighter;
 use KinoSearch::Highlight::Highlighter 'find_sentence_boundaries';
@@ -11,7 +11,7 @@ use List::Util qw 'min';
 use Number::Range;
 
 use Hash::Util::FieldHash::Compat 'fieldhashes';
-fieldhashes \my( %ellipsis, %summ_len, %page_h );
+fieldhashes \my( %ellipsis, %summ_len, %page_h, %encoder );
 
 sub _range_endpoints {
   my $range = shift;
@@ -39,20 +39,22 @@ sub new {
 	my $summ_len = exists $args{summary_length}
 		? delete $args{summary_length} : 0;
 	my $page_h = delete $args{page_handler};
+	my $encoder   = delete $args{encoder};
 
 	# accept args that the superclass only allows one to set through
 	# accessor methods:
-        my $formatter = delete $args{formatter};
-	my $encoder   = delete $args{encoder};
+        my $pre_tag = delete $args{pre_tag};
+        my $post_tag = delete $args{post_tag};
 
-	my $self = SUPER::new $pack +\%args;
+	my $self = SUPER::new $pack %args;
 
 	$ellipsis{$self} = $ellipsis;
 	$summ_len{$self} = $summ_len;
 	$page_h{$self}   = $page_h;
+	$encoder{$self}  = $encoder;
 
-	defined $formatter and $self->set_formatter($formatter);
-	defined $encoder and $self->set_encoder($encoder);
+	defined $pre_tag and $self->set_pre_tag($pre_tag);
+	defined $post_tag and $self->set_post_tag($post_tag);
 
 	return $self;
 }
@@ -71,13 +73,13 @@ sub create_excerpt {
     return '' unless $text_length;
 
     # get offsets and weights of words that match
-    my $searcher = $self->get_searcher;
+    my $searcher = $self->get_searchable;
     my @posits = $self->get_weight->highlight_spans(
-        searcher => $searcher,
-        field    => $field,
-        doc_vec  => $searcher->fetch_doc_vec(
-                        $hitdoc->get_doc_num
-                    ),
+        searchable => $searcher,
+        field      => $field,
+        doc_vec    => $searcher->fetch_doc_vec(
+                          $hitdoc->get_doc_num
+                      ),
     );
     my @locs = KinoSearch::Highlight::HeatMap->new(
         spans  => \@posits,
@@ -215,8 +217,6 @@ sub create_excerpt {
         }
 
         # insert highlight tags and page break markers
-        my $formatter   = $self->get_formatter;
-        my $encoder     = $self->get_encoder;
         my $output_text = '';
         # sstart and ssend stand for span start and end
         my ( $sstart, $send, $last_sstart, $last_send ) =
@@ -231,21 +231,21 @@ sub create_excerpt {
             while (@relative_starts) {
                 $send   = shift @relative_ends;
                 $sstart = shift @relative_starts;
-                $summary .= _encode_with_pb(
+                $summary .= _encode_with_pb( $self,
                     substr( $x, $last_send, $sstart - $last_send ),
-                    $encoder, $page_h, \$page_no, $hitdoc
+                    $page_h, \$page_no, $hitdoc
                 );
-                $summary .= $formatter->highlight(
-                    _encode_with_pb(
+                $summary .= $self->highlight(
+                    _encode_with_pb( $self,
                         substr( $x, $sstart, $send - $sstart ),
-                        $encoder, $page_h, \$page_no, $hitdoc
+                        $page_h, \$page_no, $hitdoc
                     )
                 );
                 $last_send = $send;
             }
-            $summary .= _encode_with_pb(
+            $summary .= _encode_with_pb( $self,
                 substr( $x, $last_send ),
-                $encoder, $page_h, \$page_no, $hitdoc
+                $page_h, \$page_no, $hitdoc
             );
             $prev_page = $page_no;
         }
@@ -254,16 +254,16 @@ sub create_excerpt {
            while (@relative_starts) {
                 $send   = shift @relative_ends;
                 $sstart = shift @relative_starts;
-                $summary .= $encoder->encode(
+                $summary .= $self->encode(
                     substr( $x, $last_send, $sstart - $last_send ) );
-                $summary .= $formatter->highlight(
-                    $encoder->encode(
+                $summary .= $self->highlight(
+                    $self->encode(
                         substr( $x, $sstart, $send - $sstart )
                     )
                 );
                 $last_send = $send;
             }
-            $summary .= $encoder->encode( substr( $x, $last_send ) );
+            $summary .= $self->encode( substr( $x, $last_send ) );
         }
 
     }
@@ -271,16 +271,25 @@ sub create_excerpt {
     return $summary;
 }
 
+# This is not called as a method above, because it’s a private routine that
+# should not be overridden (it is not guaranteed to exist in future ver-
+# sions), and it’s faster to call it as a function.
 sub _encode_with_pb { # w/page breaks
-	my ($text, $encoder, $page_h, $page_no_ref, $hitdoc) = @_;
+	my ($self, $text, $page_h, $page_no_ref, $hitdoc) = @_;
 	my @to_encode = split /\014/, $text, -1; # -1 to allow trailing
 	my $ret = '';                            #  null fields
-	$ret .= $encoder->encode(shift @to_encode) if length $to_encode[0];
+	$ret .= $self->encode(shift @to_encode) if length $to_encode[0];
 	for(@to_encode) {
 		$ret .= &$page_h($hitdoc, ++$$page_no_ref);
-		$ret .= $encoder->encode($_) if length;
+		$ret .= $self->encode($_) if length;
 	}
 	$ret;
+}
+
+sub encode {
+	&{
+		$encoder{$_[0]} or return shift->SUPER::encode(@_)
+	}($_[1])
 }
 
 1;
@@ -291,17 +300,24 @@ __END__
 
 KSx::Highlight::Summarizer - KinoSearch Highlighter subclass that provides more comprehensive summaries
 
+=head1 VERSION
+
+0.02 (beta)
+
 =head1 SYNOPSIS
 
   use KSx::Highlight::Summarizer;
   my $summarizer = new KSx::Highlight::Summarizer
-      searcher => $searcher,
-      query    => 'foo bar',
-      field    => 'content',
+      searchable => $searcher,
+      query      => 'foo bar',
+      field      => 'content',
       
       # optional:
-      formatter => KinoSearch::Highlighter::SimpleHTMLFormatter->new,
-      encoder   => KinoSearch::Highlighter::SimpleHTMLEncoder->new,
+      pre_tag        => '<b>',
+      post_tag       => '</b>',
+      encoder        => sub {
+          my $str = shift; $str =~ s/([&'"<])/'&#'.ord($1).';'/g; $str
+      },
       page_handler   => sub { "<h3>Page $_[0]:</h3>" },
       ellipsis       => "\x{2026}", # default: ' ... '
       excerpt_length => 150,        # default: 200
@@ -332,9 +348,10 @@ L</SYNOPSIS>. The various arguments are as follows:
 
 =over 4
 
-=item searcher
+=item searchable
 
-A reference to the searcher object (e.g., a L<KinoSearch::Searcher>)
+A reference to an object that isa L<KinoSearch::Search::Searchable> (e.g.,
+a L<KinoSearch::Searcher>)
 
 =item query
 
@@ -344,14 +361,14 @@ A query string or object
 
 The name of the field for which to make a summary
 
-=item formatter
+=item pre_tag, post_tag
 
-A formatter object that isa L<KinoSearch::Highlight::Formatter>,
-expected to do the actual highlighting of words, e.g., with HTML tags
+These two are strings of text to be inserted around highlighted words, such
+as HTML tags. The defaults are '<strong>' and '</strong>'.
 
 =item encoder
 
-An encoder object that isa L<KinoSearch::Highlight::Encoder>, which is
+An code ref that is
 expected to encode the text fed to it, e.g., with HTML entities
 
 =item page_handler
@@ -405,8 +422,8 @@ L<Number::Range>
 L<Hash::Util::FieldHash::Compat>
 
 The development version of L<KinoSearch> available at
-C<http://www.rectangular.com/svn/kinosearch/trunk>. It has only been tested 
-with revision 2997.
+L<http://www.rectangular.com/svn/kinosearch/trunk>. It has only been tested 
+with revision 3096.
 
 =head1 AUTHOR & COPYRIGHT
 

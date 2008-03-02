@@ -1,4 +1,4 @@
-KSx::Highlight::Summarizer, version 0.01 (beta)
+KSx::Highlight::Summarizer, version 0.02 (beta)
 
 This module is a subclass of KinoSearch::Highlight::Highlighter that
 offers more possibilities for customisation:
@@ -6,6 +6,15 @@ offers more possibilities for customisation:
 • Summaries (multiple excerpts for a document, joined with ellipses)
 • Pagination
 • Custom ellipsis marks
+
+
+CHANGES IN THIS RELEASE
+
+This module has been updated to work with the latest working copy of
+KinoSearch (revision 3099), and no longer works with revisions earlier
+than 3091. This has also made some API changes necessary:
+•  The constructor’s ‘encoder’ arg now expects a code ref.
+• ‘formatter’ has been replaced with ‘pre_tag’ and ‘post_tag’.
 
 
 INSTALLATION
@@ -33,12 +42,12 @@ This module requires perl and the following Perl modules:
 • Hash::Util::FieldHash::Compat
 • The development version of KinoSearch, which one can get from
   http://www.rectangular.com/svn/kinosearch/trunk/. This module has
-  only been tested with revision 2997.
+  only been tested with revision 3096.
 
 
 DOCUMENTATION
 
-After installing, you can find documentation for these modules with
+After installing, you can find documentation for this module with
 the perldoc command.
 
     perldoc KSx::Highlight::Summarizer

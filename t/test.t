@@ -5,7 +5,6 @@
 
 use strict;
 use warnings;
-use utf8;
 
 use Test::More tests =>
 +	1 # load
@@ -75,9 +74,9 @@ my $q = qq|"x y z" AND $phi|;
 my $hits = $searcher->search( query => $q );
 my $hit = $hits->fetch_hit;
 my $hl = KSx::Highlight::Summarizer->new(
-    searcher => $searcher,
-    query    => $q,
-    field    => 'content',
+    searchable => $searcher,
+    query      => $q,
+    field      => 'content',
 );
 my $excerpt = $hl->create_excerpt( $hit );
 like( $excerpt,
@@ -99,9 +98,9 @@ like( $hl->create_excerpt( $hits->fetch_hit() ),
 
 $hits = $searcher->search( query => $q = 'x "x y z" AND b' );
 $hl = KSx::Highlight::Summarizer->new(
-    searcher => $searcher,
-    query    => $q,
-    field    => 'content',
+    searchable => $searcher,
+    query      => $q,
+    field      => 'content',
 );
 like( $hl->create_excerpt( $hits->fetch_hit() ),
     qr/x y z/,
@@ -110,18 +109,18 @@ like( $hl->create_excerpt( $hits->fetch_hit() ),
 $hits = $searcher->search( query => $q = 'blind' );
 like(
     KSx::Highlight::Summarizer->new(
-        searcher => $searcher,
-        query    => $q,
-        field    => 'content',
+        searchable => $searcher,
+        query      => $q,
+        field      => 'content',
     )->create_excerpt( $hits->fetch_hit() ),
     qr/quot/, "HTML entity encoded properly" );
 
 $hits = $searcher->search( query => $q = 'why' );
 unlike(
     KSx::Highlight::Summarizer->new(
-        searcher => $searcher,
-        query    => $q,
-        field    => 'content',
+        searchable => $searcher,
+        query      => $q,
+        field      => 'content',
     )->create_excerpt( $hits->fetch_hit() ),
     qr/\.\.\./, "no ellipsis for short excerpt" );
 
@@ -131,16 +130,16 @@ $hits = $searcher->search( query => $term_query );
 $hit = $hits->fetch_hit();
 like(
     KSx::Highlight::Summarizer->new(
-        searcher => $searcher,
-        query    => $term_query,
-        field    => 'content',
+        searchable => $searcher,
+        query      => $term_query,
+        field      => 'content',
     )->create_excerpt( $hit ),
     qr/strong/, "specify field highlights correct field..." );
 unlike(
     KSx::Highlight::Summarizer->new(
-        searcher => $searcher,
-        query    => $term_query,
-        field    => 'alt',
+        searchable => $searcher,
+        query      => $term_query,
+        field      => 'alt',
     )->create_excerpt( $hit ),
     qr/strong/, "... but not another field"
 );
@@ -148,37 +147,26 @@ unlike(
 
 # ---- KSx::Highlight::Summarizer-specific tests (5 of them) ---- #
 
-# 1 test for formatter and encoder in the constructor
-
-use KinoSearch::Highlight::SimpleHTMLFormatter;
-
-{ package encoder;
-	our @ISA = 'KinoSearch::Highlight::Encoder';
-	use KinoSearch::Highlight::Encoder;
-	sub encode { for(my $x = pop) {
-		s/(\S)/ord $1/ge; return $_
-	}}
-}
-
+# 1 test for p(re|ost)_tag and encoder in the constructor
 
 $q = qq|"x y z" AND $phi|;
 $hits = $searcher->search( query => $q );
 $hit = $hits->fetch_hit;
 $hl = KSx::Highlight::Summarizer->new(
-    searcher  => $searcher,
-    query     => $q,
-    field     => 'content',
-    formatter => KinoSearch::Highlight::SimpleHTMLFormatter->new(
-                     pre_tag => ' Oh look! -->',
-                    post_tag => '<-- ',
-                 ),
-    encoder   => new encoder,
+    searchable  => $searcher,
+    query       => $q,
+    field       => 'content',
+    pre_tag => ' Oh look! -->',
+    post_tag => '<-- ',
+    encoder   => sub { for(my $x = shift) {
+		s/(\S)/ord $1/ge; return $_
+	}},
 );
 $excerpt = $hl->create_excerpt( $hit );
 like(
     $excerpt,
     qr# Oh look! -->934<-- #i,
-    "encoder and formatter in the constructor"
+    "encoder and p(re|ost)_tag in the constructor"
 );
 
 
@@ -186,16 +174,16 @@ like(
 
 $hits = $searcher->search(query => 'page');
 $hl = new KSx::Highlight::Summarizer
-	searcher => $searcher,
-	query    => 'page',
-	field    => 'content',
+	searchable => $searcher,
+	query      => 'page',
+	field      => 'content',
 ;
 like($hl->create_excerpt($hit = fetch_hit $hits), qr/&#12;/,
 	'FFs are left alone without a page_h');
 $hl = new KSx::Highlight::Summarizer
-	searcher => $searcher,
-	query    => 'page',
-	field    => 'content',
+	searchable => $searcher,
+	query      => 'page',
+	field      => 'content',
 	page_handler => sub {
 		my ($hitdoc, $page_no) = @_;
 		"This is from page $page_no:" . ' ' x ($page_no == 1);
@@ -206,9 +194,9 @@ like($hl->create_excerpt($hit),
 	'page breaks within a few characters from the highlit word');
 	# yes, I know highlit isn’t a real word
 $hl = new KSx::Highlight::Summarizer
-	searcher => $searcher,
-	query    => 'Seite', # this is the only difference between this
-	field    => 'content',  # highlighter and the previous one
+	searchable => $searcher,
+	query      => 'Seite', # this is the only difference between this
+	field      => 'content',  # highlighter and the previous one
 	page_handler => sub {
 		my ($hitdoc, $page_no) = @_;
 		"This is from page $page_no: ";
@@ -221,9 +209,9 @@ like($hl->create_excerpt($hit), qr/This is from page 4:\s+\.\.\. .*Seite/,
 # 1 test for custom ellipsis marks and for summaries
 
 $hl = new KSx::Highlight::Summarizer
-	searcher => $searcher,
-	query    => 'blah Seite',
-	field    => 'content', 
+	searchable => $searcher,
+	query      => 'blah Seite',
+	field      => 'content', 
 	summary_length => 400,
 	ellipsis => ' yoda yoda yoda ',
 ;

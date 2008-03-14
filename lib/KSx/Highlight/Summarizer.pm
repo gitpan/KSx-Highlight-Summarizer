@@ -1,6 +1,6 @@
 package KSx::Highlight::Summarizer;
 
-$VERSION = '0.02';
+$VERSION = '0.03';
 
 @ISA = KinoSearch::Highlight::Highlighter;
 use KinoSearch::Highlight::Highlighter 'find_sentence_boundaries';
@@ -144,8 +144,9 @@ sub create_excerpt {
             $x = substr $text, $start;
         }
         elsif( $start ) { # if this is not the beginning of the doc
-            my $sb = find_sentence_boundaries( $text, $start, $end );
-            if(defined $sb and $sb - $start < $limit) {
+            if(defined(my $sb = find_sentence_boundaries(
+                $text, $start, $start+$limit
+            ))) {
                 $start = $sb;
             }
             else { ++ $need_ellipsis unless $prev_ellipsis }
@@ -180,7 +181,7 @@ sub create_excerpt {
         if ( $end < $text_length) {{ # doubled so ‘last’ will work
             # check to see whether there are page breaks after the high-
             # lighted word, and stop at the first one if so
-            if ($page_h and substr($x, $limit*-2) =~ s/([^\014]*\014)//) {
+            if ($page_h and substr($x, $limit*-2) =~ s/(\014[^\014]*)//) {
                 $end -= length $1; last;
             }
 
@@ -302,7 +303,7 @@ KSx::Highlight::Summarizer - KinoSearch Highlighter subclass that provides more 
 
 =head1 VERSION
 
-0.02 (beta)
+0.03 (beta)
 
 =head1 SYNOPSIS
 
@@ -316,9 +317,9 @@ KSx::Highlight::Summarizer - KinoSearch Highlighter subclass that provides more 
       pre_tag        => '<b>',
       post_tag       => '</b>',
       encoder        => sub {
-          my $str = shift; $str =~ s/([&'"<])/'&#'.ord($1).';'/g; $str
+          my $str = shift; $str =~ s/([&'"<])/'&#'.ord($1).';'/eg; $str
       },
-      page_handler   => sub { "<h3>Page $_[0]:</h3>" },
+      page_handler   => sub { "<h3>Page $_[1]:</h3>" },
       ellipsis       => "\x{2026}", # default: ' ... '
       excerpt_length => 150,        # default: 200
       summary_length => 400,
@@ -376,7 +377,7 @@ expected to encode the text fed to it, e.g., with HTML entities
 A coderef. If this is provided, it will be called for every page break
 (form feed; ASCII character 12) in the summary, and its return value 
 substituted for that
-page break. The arguments will be (0) the hit (a L<KinoSearch::Doc::HitDoc
+page break. The arguments will be (0) the hit (a L<KinoSearch::Doc::HitDoc>
 object) and (1) the page number.
 
 =item ellipsis
@@ -423,7 +424,7 @@ L<Hash::Util::FieldHash::Compat>
 
 The development version of L<KinoSearch> available at
 L<http://www.rectangular.com/svn/kinosearch/trunk>. It has only been tested 
-with revision 3096.
+with revision 3118.
 
 =head1 AUTHOR & COPYRIGHT
 

@@ -1,5 +1,13 @@
 Revision history for KSx::Highlight::Summarizer
 
+0.03    14 March, 2008
+        One bug fix:  In ‘page break mode’  (when there is a page han-
+        dler),  an excerpt that trails on to the next  page  is  trun-
+        cated  (starting excerpt_length * 2/3 chars before the end of
+        the excerpt)  to just before the page break  (this is  a  fea-
+        ture).  Before,  the text from the starting point up to  (and
+        including) the page break would be deleted instead.
+
 0.02    2 March, 2008
       • Updated to work with the current working copy of KinoSearch
         (it no longer works with revisions earlier than 3091)

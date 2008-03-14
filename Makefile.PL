@@ -21,10 +21,14 @@ use ExtUtils::MakeMaker;
 );
 
 eval{require KinoSearch::Highlight::Highlighter}
-	&& KinoSearch::Highlight::Highlighter->can('encode')
+	&& exists
+	    &KinoSearch::Highlight::Highlighter::find_sentence_boundaries
+	&& KinoSearch::Highlight::Highlighter::find_sentence_boundaries(
+		'a. b. c.', 2
+	   ) == 6
 or $prq{KinoSearch} = 9999, print <<, "\n" ;
 This module requires the development version of KinoSearch, revision
-3091 or later, which can be obtained from the following URL:
+3118 or later, which can be obtained from the following URL:
 http://www.rectangular.com/svn/kinosearch/trunk
 
 

@@ -63,7 +63,8 @@ $invindexer->add_doc( { content => 'haecceity: you don’t know what that'
 	. ' word means, do you? ' . '3 ' x 1000
 	. 'Look, here it is again: haecceity'
 } );
-$invindexer->add_doc( { content => "blah blah blah \014 page 2 \014 "
+$invindexer->add_doc( { content => "blah blah blah " . 'rhubarb ' x 40
+	. "\014 page 2 \014 "
 	. "σελίδα 3 \014 " . '42 ' x 1000 . "Seite 4"
 } );
 $invindexer->finish;

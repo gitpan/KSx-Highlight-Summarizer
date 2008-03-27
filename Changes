@@ -1,5 +1,15 @@
 Revision history for KSx::Highlight::Summarizer
 
+0.04    ?? March, 2008
+        Just bug fixes:
+      • A highlighted word at the beginning or end of an indexed field
+        used to warn in page break mode.
+      • In summary and page break mode,  an ellipsis at the end of one
+        excerpt would cause the start of the following excerpt,  if it
+        occurred on another page, not to be trimmed to a word boundary
+        and not to have an ellipsis mark after the page marker, unless
+        there were a sentence boundary to trim to.
+
 0.03    14 March, 2008
         One bug fix:  In ‘page break mode’  (when there is a page han-
         dler),  an excerpt that trails on to the next  page  is  trun-

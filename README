@@ -1,4 +1,4 @@
-KSx::Highlight::Summarizer, version 0.03 (beta)
+KSx::Highlight::Summarizer, version 0.04 (beta)
 
 This module is a subclass of KinoSearch::Highlight::Highlighter that
 offers more possibilities for customisation:
@@ -10,13 +10,14 @@ offers more possibilities for customisation:
 
 CHANGES IN THIS RELEASE
 
-• This module now requires revision 3118 or later of KinoSearch.
-• One bug has been fixed:  In ‘page break mode’ (when there is a page
-  handler),  an excerpt that trails on to the next page is  truncated
-  (starting excerpt_length * 2/3 chars before the end of the excerpt)
-  to just before the page break (this is a feature). Before, the text
-  from the starting point up to (and including)  the page break would
-  be deleted instead.
+Just bug fixes:
+• A highlighted word at the beginning or end of an indexed field used
+  to warn in page break mode.
+• In summary and page break mode,  an ellipsis at  the  end  of  one
+  excerpt would cause the start of  the  following  excerpt,  if  it
+  occurred on another page, not to be trimmed to a word boundary and
+  not to have an ellipsis mark after the page marker,  unless  there
+  were a sentence boundary to trim to.
 
 
 INSTALLATION
@@ -42,7 +43,8 @@ This module requires perl and the following Perl modules:
 
 • Number::Range
 • Hash::Util::FieldHash::Compat
-• The development version of KinoSearch, which one can get from
+• The development version of KinoSearch, revision 3118 or later,
+  which one can get from
   http://www.rectangular.com/svn/kinosearch/trunk/. This module has
   only been tested with revision 3122.
 

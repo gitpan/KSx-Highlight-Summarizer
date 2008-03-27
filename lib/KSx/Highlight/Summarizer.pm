@@ -1,6 +1,6 @@
 package KSx::Highlight::Summarizer;
 
-$VERSION = '0.03';
+$VERSION = '0.04';
 
 @ISA = KinoSearch::Highlight::Highlighter;
 use KinoSearch::Highlight::Highlighter 'find_sentence_boundaries';
@@ -106,7 +106,7 @@ sub create_excerpt {
         $excerpt_bounds[$c][0] - $excerpt_bounds[$c-1][1] <= 10 and
             $excerpt_bounds[$c-1][1] = $excerpt_bounds[$c][1],
             splice(@excerpt_bounds, $c, 1),
-            redo;
+            --$c;
     }
 
     # extract the offsets from the highlight spans
@@ -137,6 +137,9 @@ sub create_excerpt {
         # look for a page break within $limit chars from $start (except we
         # shouldn’t do it if $start is 0 because there’s  a  good  chance
         # we’ll go past the very word for whose sake this excerpt exists)
+	# ~~~ What about a case in which a page break plus maybe a few
+	#     spaces occur just *before* $start. That shouldn’t get an
+	#     ellipsis  (as in the  elsif  block  below),  should  it?
         if($page_h && $start &&
            substr($text,$start,$limit) =~ /^(.*)\014/s) {
             $start += length($1) + 1;
@@ -149,7 +152,7 @@ sub create_excerpt {
             ))) {
                 $start = $sb;
             }
-            else { ++ $need_ellipsis unless $prev_ellipsis }
+            else { ++ $need_ellipsis }
             $x = substr $text, $start;
             if($need_ellipsis) {                      
                 # skip past possible partial tokens, but don’t insert an
@@ -158,9 +161,7 @@ sub create_excerpt {
                 if ($x =~ s/
                     \A
                     (
-                    .{0,$limit}?  # don't go outside the window
-                    $token_re      # match possible partial token
-                    .*?            # ... and any junk following that token
+                    .{1,$limit}?  # don't go outside the window
                     )
                     (?=$token_re)  # just b4 the start of a full token
                     //xsm
@@ -175,7 +176,7 @@ sub create_excerpt {
         # trim unwanted text from the end of the excerpt
         $x = substr $x, 0, $end-$start+1;  # +1 ’cos we need that extra
                                            #  char later
-        $prev_ellipsis = 0;
+        my $end_with_ellipsis = 0;
 
         # if we’ve trimmed the end of the text
         if ( $end < $text_length) {{ # doubled so ‘last’ will work
@@ -198,7 +199,7 @@ sub create_excerpt {
             if ( $x !~ /\.\s*\Z/xsm ) {
                 $x =~ s/\W+\Z//xsm;
                 $x .= $ellipsis;
-                ++$prev_ellipsis;
+                ++$end_with_ellipsis;
             }
         }}
 #warn $x if $page_h;
@@ -218,8 +219,7 @@ sub create_excerpt {
         }
 
         # insert highlight tags and page break markers
-        my $output_text = '';
-        # sstart and ssend stand for span start and end
+        # sstart and send stand for span start and end
         my ( $sstart, $send, $last_sstart, $last_send ) =
            (  undef,  undef,  0,            0 );
         if($page_h) { # Some of this code *is* repeated redundantly, but it
@@ -227,15 +227,19 @@ sub create_excerpt {
                       # if($page_h) check doesn’t have to be made every
                       # time through the loop.
             $prev_page != $page_no
-                and $summary .= &$page_h($hitdoc, $page_no);
-            $need_ellipsis and $summary .= $ellipsis;
+            ? (
+                $summary .= &$page_h($hitdoc, $page_no),
+                $need_ellipsis && ($summary .= $ellipsis)
+            ) : $need_ellipsis && !$prev_ellipsis &&
+                ($summary .= $ellipsis)
+            ;
             while (@relative_starts) {
                 $send   = shift @relative_ends;
                 $sstart = shift @relative_starts;
                 $summary .= _encode_with_pb( $self,
                     substr( $x, $last_send, $sstart - $last_send ),
                     $page_h, \$page_no, $hitdoc
-                );
+                ) unless !$last_send && !$sstart;
                 $summary .= $self->highlight(
                     _encode_with_pb( $self,
                         substr( $x, $sstart, $send - $sstart ),
@@ -247,16 +251,17 @@ sub create_excerpt {
             $summary .= _encode_with_pb( $self,
                 substr( $x, $last_send ),
                 $page_h, \$page_no, $hitdoc
-            );
+            ) unless $last_send == length $x;
             $prev_page = $page_no;
         }
         else {
-           $need_ellipsis and $summary .= $ellipsis;
+           $need_ellipsis and !$prev_ellipsis and $summary .= $ellipsis;
            while (@relative_starts) {
                 $send   = shift @relative_ends;
                 $sstart = shift @relative_starts;
                 $summary .= $self->encode(
-                    substr( $x, $last_send, $sstart - $last_send ) );
+                    substr( $x, $last_send, $sstart - $last_send ) )
+		    unless !$last_send && !$sstart;
                 $summary .= $self->highlight(
                     $self->encode(
                         substr( $x, $sstart, $send - $sstart )
@@ -264,8 +269,11 @@ sub create_excerpt {
                 );
                 $last_send = $send;
             }
-            $summary .= $self->encode( substr( $x, $last_send ) );
+            $summary .= $self->encode( substr( $x, $last_send ) )
+                unless $last_send == length $x;
         }
+
+        $prev_ellipsis = $end_with_ellipsis;
 
     }
 
@@ -303,7 +311,7 @@ KSx::Highlight::Summarizer - KinoSearch Highlighter subclass that provides more 
 
 =head1 VERSION
 
-0.03 (beta)
+0.04 (beta)
 
 =head1 SYNOPSIS
 
@@ -336,7 +344,8 @@ joined together with ellipses.
 
 The superclass finds the best location with the text of a search result,
 takes a single piece of text surrounding it, and then formats it, 
-highlighting words as appropriate. This module will take the second best
+highlighting words as appropriate. This module will also take the second 
+best
 location and create an excerpt for that (removing overlap), and so on until 
 the C<summary_length> is reached or exceeded.
 
@@ -423,8 +432,9 @@ L<Number::Range>
 L<Hash::Util::FieldHash::Compat>
 
 The development version of L<KinoSearch> available at
-L<http://www.rectangular.com/svn/kinosearch/trunk>. It has only been tested 
-with revision 3118.
+L<http://www.rectangular.com/svn/kinosearch/trunk>, revision 3118 or later.
+It has only been tested 
+with revision 3122.
 
 =head1 AUTHOR & COPYRIGHT
 

@@ -9,7 +9,7 @@ use warnings;
 use Test::More tests =>
 +	1 # load
 +	9 # stolen from KinoSearch::Highlighter
-+	5 # KSx:H:S-specific features
++	9 # KSx:H:S-specific features
 ;
 
 use_ok 'KSx::Highlight::Summarizer'; # test 1
@@ -67,6 +67,11 @@ $invindexer->add_doc( { content => "blah blah blah " . 'rhubarb ' x 40
 	. "\014 page 2 \014 "
 	. "σελίδα 3 \014 " . '42 ' x 1000 . "Seite 4"
 } );
+$invindexer->add_doc({ content => 'abacus ' . 'acrobat ' x 40 . "\f" .
+                                  'acrobat ' x 40 . 'abacus' });
+$invindexer->add_doc({ content => 'bear ' x 40 . 'beaver ' . 'bear ' x 40 .
+                                  'beaver ' . 'bear ' x 40 });
+$invindexer->add_doc({ content => 'cat cat cat carrot cat cat cat' });
 $invindexer->finish;
 
 my $searcher = KinoSearch::Searcher->new( invindex => $invindex, );
@@ -146,7 +151,7 @@ unlike(
 );
 
 
-# ---- KSx::Highlight::Summarizer-specific tests (5 of them) ---- #
+# ---- KSx::Highlight::Summarizer-specific tests (9 of them) ---- #
 
 # 1 test for p(re|ost)_tag and encoder in the constructor
 
@@ -171,7 +176,7 @@ like(
 );
 
 
-# 3 tests for page-break handling
+# 5 tests for page-break handling
 
 $hits = $searcher->search(query => 'page');
 $hl = new KSx::Highlight::Summarizer
@@ -207,7 +212,32 @@ like($hl->create_excerpt($hit), qr/This is from page 4:\s+\.\.\. .*Seite/,
 	'Page marker followed by ellipsis');
 
 
-# 1 test for custom ellipsis marks and for summaries
+$hl = new KSx::Highlight::Summarizer
+	searchable => $searcher,
+	query      => 'abacus', # this is the only difference between this
+	field      => 'content',  # highlighter and the previous one
+	summary_length => 500,
+	page_handler => sub {
+		my ($hitdoc, $page_no) = @_;
+		"This is from page $page_no: ";
+	}
+;
+{
+	my $warnings;
+	local $SIG{__WARN__} = sub { print STDERR shift; ++$warnings};
+	$excerpt = $hl->create_excerpt(
+		$searcher->search(query => 'abacus')->fetch_hit
+	);
+	is $warnings, undef,
+	    'highlighted word at beginning or end of doc doesn\'t warn';
+	    # bug in 0.03
+}
+like $excerpt, qr/page 2:  \.\.\. acrobat/,
+'ellipses around a page break; no sentence bounds in sight after pg break';
+# bug in 0.03: used to match /page 2: t acrobat/
+
+
+# 2 test for summaries (1 of which is also for custom ellipsis marks)
 
 $hl = new KSx::Highlight::Summarizer
 	searchable => $searcher,
@@ -218,4 +248,37 @@ $hl = new KSx::Highlight::Summarizer
 ;
 like ($hl->create_excerpt($hit), qr/blah.*? yoda yoda yoda .*?Seite/,
 	'summaries and custom ellipsis marks');
+
+# bug in 0.03: This would cause an infinite loop
+$hl = new KSx::Highlight::Summarizer
+	searchable => $searcher,
+	query      => 'beaver',
+	field      => 'content', 
+	summary_length => 500,
+	excerpt_length => 200,
+;
+unlike (
+	$hl->create_excerpt(
+		$searcher->search(query => 'beaver')->fetch_hit
+	),
+	qr/\w \.\.\. \w/,
+	'merging of almost adjacent excerpts'
+);
+
+# 1 test for a bug in 0.03: this used to trim more than necessary when the
+#                           excerpt began with a space
+
+$hl = new KSx::Highlight::Summarizer
+	searchable => $searcher,
+	query      => 'carrot',
+	field      => 'content', 
+	excerpt_length => 15,
+;
+is (
+	$hl->create_excerpt(
+		$searcher->search(query => 'carrot')->fetch_hit
+	),
+	' ... cat <strong>carrot</strong> cat ... ',
+	'trimming of the start of an excerpt'
+);
 

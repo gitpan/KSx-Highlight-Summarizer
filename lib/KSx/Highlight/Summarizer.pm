@@ -1,9 +1,9 @@
 package KSx::Highlight::Summarizer;
 
-$VERSION = '0.04';
+$VERSION = '0.05';
 
 @ISA = KinoSearch::Highlight::Highlighter;
-use KinoSearch::Highlight::Highlighter 'find_sentence_boundaries';
+use KinoSearch::Highlight::Highlighter;
 
 use strict;
 
@@ -74,17 +74,21 @@ sub create_excerpt {
 
     # get offsets and weights of words that match
     my $searcher = $self->get_searchable;
-    my @posits = $self->get_weight->highlight_spans(
+    my $posits = $self->get_compiler->highlight_spans(
         searchable => $searcher,
         field      => $field,
         doc_vec    => $searcher->fetch_doc_vec(
-                          $hitdoc->get_doc_num
+                          $hitdoc->get_doc_id
                       ),
     );
-    my @locs = KinoSearch::Highlight::HeatMap->new(
-        spans  => \@posits,
+    my @locs = map [$_->get_offset,$_->get_weight], @{
+     KinoSearch::Highlight::HeatMap->new(
+        spans  => $posits,
         window => $limit*2
-    )->hot_to_cold;
+     )->get_spans->to_perl
+    };
+    @locs = map $$_[0], sort { $$b[1] <=> $$a[1] } @locs;
+    
     @locs or @locs = 0;
 
 #warn "@locs" if $summ_len{$self};
@@ -111,8 +115,10 @@ sub create_excerpt {
 
     # extract the offsets from the highlight spans
     my(@starts, @ends);
-    push(@starts, $_->get_start_offset),
-    push(@ends,   $_->get_end_offset)    for @posits;
+    for(@$posits) {
+     push(@starts, my $start = $_->get_offset);
+     push(@ends,   $start + $_->get_length);
+    }
 
     # make the summary
     my $summary = '';
@@ -147,10 +153,11 @@ sub create_excerpt {
             $x = substr $text, $start;
         }
         elsif( $start ) { # if this is not the beginning of the doc
-            if(defined(my $sb = find_sentence_boundaries(
-                $text, $start, $start+$limit
-            ))) {
-                $start = $sb;
+            my $sb = $self->find_sentences(
+                text => $text, offset => $start, length => $limit
+            );
+            if(@$sb) {
+                $start = $$sb[0];
             }
             else { ++ $need_ellipsis }
             $x = substr $text, $start;
@@ -296,9 +303,10 @@ sub _encode_with_pb { # w/page breaks
 }
 
 sub encode {
+	my @__ = @_; # workaround for perl5.8.8 bug
 	&{
-		$encoder{$_[0]} or return shift->SUPER::encode(@_)
-	}($_[1])
+		$encoder{$__[0]} or return shift(@__)->SUPER::encode(@__)
+	}($__[1])
 }
 
 1;
@@ -311,7 +319,7 @@ KSx::Highlight::Summarizer - KinoSearch Highlighter subclass that provides more 
 
 =head1 VERSION
 
-0.04 (beta)
+0.05 (beta)
 
 =head1 SYNOPSIS
 
@@ -432,19 +440,21 @@ L<Number::Range>
 L<Hash::Util::FieldHash::Compat>
 
 The development version of L<KinoSearch> available at
-L<http://www.rectangular.com/svn/kinosearch/trunk>, revision 3118 or later.
+L<http://www.rectangular.com/svn/kinosearch/trunk>, revision 4496 or later.
 It has only been tested 
-with revision 3122.
+with revision 4551.
 
 =head1 AUTHOR & COPYRIGHT
 
-Copyright (C) 2008 Father Chrysostomos <sprout at, um, cpan.org>
+Copyright (C) 2008-9 Father Chrysostomos <sprout at, um, cpan.org>
 
 This program is free software; you may redistribute or modify it (or both)
 under the same terms as perl.
 
 =head1 ACKNOWLEDGEMENTS
 
-Much of the code in this module is based on Marvin Humphrey's C<KinoSearch::Highlight::Highlighter>, of which this is a subclass.
+Much of the code in this module is based on revision 3122 of Marvin
+Humphrey's C<KinoSearch::Highlight::Highlighter>, of which this is a 
+subclass.
 
 =cut

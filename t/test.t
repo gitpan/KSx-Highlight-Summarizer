@@ -1,10 +1,11 @@
 #!/usr/bin/perl -w
 
 # Half of this test script was stolen from KinoSearch’s Highlighter tests
-# (with the appropriate modifications).
+# (as of revision 3122) (with the appropriate modifications).
 
 use strict;
 use warnings;
+use utf8;
 
 use Test::More tests =>
 +	1 # load
@@ -15,70 +16,74 @@ use Test::More tests =>
 use_ok 'KSx::Highlight::Summarizer'; # test 1
 
 
-package MySchema::alt;
-use base qw( KinoSearch::FieldSpec::text );
-sub boost {0.1}
+# Set up the schema
+require KinoSearch::Schema;
+require KinoSearch::Analysis::Tokenizer;
+require KinoSearch::FieldType::FullTextType;
+my $schema = new KinoSearch::Schema;
+{
+ my $analyser = KinoSearch::Analysis::Tokenizer->new;
+ $schema->spec_field(
+  name => 'content', type =>
+   new KinoSearch::FieldType::FullTextType
+    analyzer => $analyser,
+    highlightable => 1,
+ );
+ $schema->spec_field(
+  name => 'alt', type =>
+   new KinoSearch::FieldType::FullTextType
+    analyzer => $analyser,
+    boost => 0.1,
+    highlightable => 1,
+ );
+}
 
-package MySchema;
-use base qw( KinoSearch::Schema );
-use KinoSearch::Analysis::Tokenizer;
-
-our %fields = (
-    content => 'text',
-    alt     => 'MySchema::alt',
-);
-
-sub analyzer { KinoSearch::Analysis::Tokenizer->new }
-
-package main;
 
 # ------ KinoSearch::Highlight::Highlighter’s tests (9 of them) ------- #
 
 use KinoSearch::Searcher;
 use KinoSearch::Highlight::Highlighter;
-use KinoSearch::InvIndexer;
-use KinoSearch::InvIndex;
+use KinoSearch::Indexer;
 use KinoSearch::Store::RAMFolder;
 
 my $phi         = "\x{03a6}";
-my $encoded_phi = "&phi;";
+my $encoded_phi = "&(?:#934|Phi);";
 
 my $string = '1 2 3 4 5 ' x 20;    # 200 characters
 $string .= "$phi a b c d x y z h i j k ";
 $string .= '6 7 8 9 0 ' x 20;
 my $with_quotes = '"I see," said the blind man.';
-my $invindex    = KinoSearch::InvIndex->clobber(
-    folder => KinoSearch::Store::RAMFolder->new,
-    schema => MySchema->new,
+my $indexer   = KinoSearch::Indexer->new(
+    index => my $folder = KinoSearch::Store::RAMFolder->new,
+    schema => $schema,
 );
 
-my $invindexer = KinoSearch::InvIndexer->new( invindex => $invindex, );
-$invindexer->add_doc( { content => $_ } ) for ( $string, $with_quotes );
-$invindexer->add_doc(
+$indexer->add_doc( { content => $_ } ) for ( $string, $with_quotes );
+$indexer->add_doc(
     {   content => "x but not why or 2ee",
         alt     => $string . " and extra stuff so it scores lower",
     }
 );
-$invindexer->add_doc( { content => 'haecceity: you don’t know what that'
+$indexer->add_doc( { content => 'haecceity: you don’t know what that'
 	. ' word means, do you? ' . '3 ' x 1000
 	. 'Look, here it is again: haecceity'
 } );
-$invindexer->add_doc( { content => "blah blah blah " . 'rhubarb ' x 40
+$indexer->add_doc( { content => "blah blah blah " . 'rhubarb ' x 40
 	. "\014 page 2 \014 "
 	. "σελίδα 3 \014 " . '42 ' x 1000 . "Seite 4"
 } );
-$invindexer->add_doc({ content => 'abacus ' . 'acrobat ' x 40 . "\f" .
+$indexer->add_doc({ content => 'abacus ' . 'acrobat ' x 40 . "\f" .
                                   'acrobat ' x 40 . 'abacus' });
-$invindexer->add_doc({ content => 'bear ' x 40 . 'beaver ' . 'bear ' x 40 .
+$indexer->add_doc({ content => 'bear ' x 40 . 'beaver ' . 'bear ' x 40 .
                                   'beaver ' . 'bear ' x 40 });
-$invindexer->add_doc({ content => 'cat cat cat carrot cat cat cat' });
-$invindexer->finish;
+$indexer->add_doc({ content => 'cat cat cat carrot cat cat cat' });
+$indexer->commit;
 
-my $searcher = KinoSearch::Searcher->new( invindex => $invindex, );
+my $searcher = KinoSearch::Searcher->new( index => $folder );
 
 my $q = qq|"x y z" AND $phi|;
-my $hits = $searcher->search( query => $q );
-my $hit = $hits->fetch_hit;
+my $hits = $searcher->hits( query => $q );
+my $hit = $hits->next;
 my $hl = KSx::Highlight::Summarizer->new(
     searchable => $searcher,
     query      => $q,
@@ -98,42 +103,43 @@ like(
     "highlighter tagged the single term"
 );
 
-like( $hl->create_excerpt( $hits->fetch_hit() ),
+like( $hl->create_excerpt( $hits->next() ),
     qr/x/,
     "excerpt field with partial hit doesn't cause highlighter freakout" );
 
-$hits = $searcher->search( query => $q = 'x "x y z" AND b' );
+$hits = $searcher->hits( query => $q = 'x "x y z" AND b' );
 $hl = KSx::Highlight::Summarizer->new(
     searchable => $searcher,
     query      => $q,
     field      => 'content',
 );
-like( $hl->create_excerpt( $hits->fetch_hit() ),
+like( $hl->create_excerpt( $hits->next() ),
     qr/x y z/,
     "query with same word in both phrase and term doesn't cause freakout" );
 
-$hits = $searcher->search( query => $q = 'blind' );
+$hits = $searcher->hits( query => $q = 'blind' );
 like(
     KSx::Highlight::Summarizer->new(
         searchable => $searcher,
         query      => $q,
         field      => 'content',
-    )->create_excerpt( $hits->fetch_hit() ),
+    )->create_excerpt( $hits->next() ),
     qr/quot/, "HTML entity encoded properly" );
 
-$hits = $searcher->search( query => $q = 'why' );
+$hits = $searcher->hits( query => $q = 'why' );
 unlike(
     KSx::Highlight::Summarizer->new(
         searchable => $searcher,
         query      => $q,
         field      => 'content',
-    )->create_excerpt( $hits->fetch_hit() ),
+    )->create_excerpt( $hits->next() ),
     qr/\.\.\./, "no ellipsis for short excerpt" );
 
 my $term_query = KinoSearch::Search::TermQuery->new(
-    term => KinoSearch::Index::Term->new( content => 'x' ) );
+    field => 'content', term => 'x'
+);
 $hits = $searcher->search( query => $term_query );
-$hit = $hits->fetch_hit();
+$hit = $hits->next();
 like(
     KSx::Highlight::Summarizer->new(
         searchable => $searcher,
@@ -156,8 +162,8 @@ unlike(
 # 1 test for p(re|ost)_tag and encoder in the constructor
 
 $q = qq|"x y z" AND $phi|;
-$hits = $searcher->search( query => $q );
-$hit = $hits->fetch_hit;
+$hits = $searcher->hits( query => $q );
+$hit = $hits->next;
 $hl = KSx::Highlight::Summarizer->new(
     searchable  => $searcher,
     query       => $q,
@@ -178,13 +184,13 @@ like(
 
 # 5 tests for page-break handling
 
-$hits = $searcher->search(query => 'page');
+$hits = $searcher->hits(query => 'page');
 $hl = new KSx::Highlight::Summarizer
 	searchable => $searcher,
 	query      => 'page',
 	field      => 'content',
 ;
-like($hl->create_excerpt($hit = fetch_hit $hits), qr/&#12;/,
+like($hl->create_excerpt($hit = $hits->next), qr/&#12;|\cL/,
 	'FFs are left alone without a page_h');
 $hl = new KSx::Highlight::Summarizer
 	searchable => $searcher,
@@ -226,7 +232,7 @@ $hl = new KSx::Highlight::Summarizer
 	my $warnings;
 	local $SIG{__WARN__} = sub { print STDERR shift; ++$warnings};
 	$excerpt = $hl->create_excerpt(
-		$searcher->search(query => 'abacus')->fetch_hit
+		$searcher->hits(query => 'abacus')->next
 	);
 	is $warnings, undef,
 	    'highlighted word at beginning or end of doc doesn\'t warn';
@@ -259,7 +265,7 @@ $hl = new KSx::Highlight::Summarizer
 ;
 unlike (
 	$hl->create_excerpt(
-		$searcher->search(query => 'beaver')->fetch_hit
+		$searcher->hits(query => 'beaver')->next
 	),
 	qr/\w \.\.\. \w/,
 	'merging of almost adjacent excerpts'
@@ -276,7 +282,7 @@ $hl = new KSx::Highlight::Summarizer
 ;
 is (
 	$hl->create_excerpt(
-		$searcher->search(query => 'carrot')->fetch_hit
+		$searcher->hits(query => 'carrot')->next
 	),
 	' ... cat <strong>carrot</strong> cat ... ',
 	'trimming of the start of an excerpt'

@@ -12,23 +12,61 @@ use ExtUtils::MakeMaker;
 # for testing:
 	base                                       => 0,
 	KinoSearch::Analysis::Tokenizer            => 0,
-	KinoSearch::FieldSpec::text                => 0,
-	KinoSearch::InvIndex                       => 0,
-	KinoSearch::InvIndexer                     => 0,           
+	KinoSearch::FieldType::FullTextType        => 0,
+	KinoSearch::Indexer                        => 0,           
 	KinoSearch::Searcher                       => 0,
+	KinoSearch::Schema                         => 0,
 	KinoSearch::Store::RAMFolder               => 0,
 	Test::More                                 => 0,
+	utf8                                       => 0,
 );
 
-eval{require KinoSearch::Highlight::Highlighter}
-	&& exists
-	    &KinoSearch::Highlight::Highlighter::find_sentence_boundaries
-	&& KinoSearch::Highlight::Highlighter::find_sentence_boundaries(
-		'a. b. c.', 2
-	   ) == 6
-or $prq{KinoSearch} = 9999, print <<, "\n" ;
+eval(<<'version_test') or $prq{KinoSearch} = 9999, print <<, "\n" ;
+# Set up the schema
+require KinoSearch::Schema;
+require KinoSearch::Analysis::Tokenizer;
+require KinoSearch::FieldType::FullTextType;
+my $schema = new KinoSearch::Schema;
+{
+ my $analyser = KinoSearch::Analysis::Tokenizer->new;
+ $schema->spec_field(
+  name => 'content', type =>
+   new KinoSearch::FieldType::FullTextType
+    analyzer => $analyser,
+    highlightable => 1,
+ );
+}
+
+use KinoSearch::Searcher;
+use KinoSearch::Indexer;
+use KinoSearch::Store::RAMFolder;
+
+my $indexer   = KinoSearch::Indexer->new(
+    index => my $folder = KinoSearch::Store::RAMFolder->new,
+    schema => $schema,
+);
+
+my $phi = "\x{03a6}";
+$indexer->add_doc( { content => "$phi a b c d x y z h i j k " } );
+$indexer->commit;
+
+my $searcher = KinoSearch::Searcher->new( index => $folder );
+
+my $q = qq|"x y z" AND $phi|;
+my $hits = $searcher->hits( query => $q );
+my $hit = $hits->next;
+
+scalar @{
+ $searcher->glean_query($q)->make_compiler(searchable => $searcher)
+  ->highlight_spans(
+   searchable => $searcher,
+   field      => 'content',
+   doc_vec    => $searcher->fetch_doc_vec( $hit->get_doc_id )
+  )
+};
+version_test
 This module requires the development version of KinoSearch, revision
-3118 or later, which can be obtained from the following URL:
+4496 or later, which can be obtained from the following URL:
 http://www.rectangular.com/svn/kinosearch/trunk
 
 

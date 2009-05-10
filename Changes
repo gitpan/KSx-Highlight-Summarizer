@@ -1,6 +1,10 @@
 Revision history for KSx::Highlight::Summarizer
 
-0.04    ?? March, 2008
+0.05    10 May, 2009
+        Updated to work with KinoSearch revision 4551 (now
+        requires 4496)
+
+0.04    26 March, 2008
         Just bug fixes:
       • A highlighted word at the beginning or end of an indexed field
         used to warn in page break mode.

@@ -1,5 +1,9 @@
 Revision history for KSx::Highlight::Summarizer
 
+0.06    21 May, 2009
+        Updated to work with the latest KinoSearch working copy  (now
+        requires 4604)
+
 0.05    10 May, 2009
         Updated to work with KinoSearch revision 4551 (now
         requires 4496)

@@ -1,6 +1,6 @@
 package KSx::Highlight::Summarizer;
 
-$VERSION = '0.05';
+$VERSION = '0.06';
 
 @ISA = KinoSearch::Highlight::Highlighter;
 use KinoSearch::Highlight::Highlighter;
@@ -85,7 +85,7 @@ sub create_excerpt {
      KinoSearch::Highlight::HeatMap->new(
         spans  => $posits,
         window => $limit*2
-     )->get_spans->to_perl
+     )->get_spans
     };
     @locs = map $$_[0], sort { $$b[1] <=> $$a[1] } @locs;
     
@@ -319,7 +319,7 @@ KSx::Highlight::Summarizer - KinoSearch Highlighter subclass that provides more 
 
 =head1 VERSION
 
-0.05 (beta)
+0.06 (beta)
 
 =head1 SYNOPSIS
 
@@ -433,16 +433,14 @@ break the page-counting algorithm.
 This module requires perl and the following modules, which available from
 the CPAN:
 
-L<List::Util>
-
 L<Number::Range>
 
 L<Hash::Util::FieldHash::Compat>
 
 The development version of L<KinoSearch> available at
-L<http://www.rectangular.com/svn/kinosearch/trunk>, revision 4496 or later.
+L<http://www.rectangular.com/svn/kinosearch/trunk>, revision 4604 or later.
 It has only been tested 
-with revision 4551.
+with revision 4625.
 
 =head1 AUTHOR & COPYRIGHT
 

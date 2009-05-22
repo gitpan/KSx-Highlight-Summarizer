@@ -138,7 +138,7 @@ unlike(
 my $term_query = KinoSearch::Search::TermQuery->new(
     field => 'content', term => 'x'
 );
-$hits = $searcher->search( query => $term_query );
+$hits = $searcher->hits( query => $term_query );
 $hit = $hits->next();
 like(
     KSx::Highlight::Summarizer->new(

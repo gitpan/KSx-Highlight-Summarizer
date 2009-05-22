@@ -56,17 +56,23 @@ my $q = qq|"x y z" AND $phi|;
 my $hits = $searcher->hits( query => $q );
 my $hit = $hits->next;
 
-scalar @{
+my $posits =
  $searcher->glean_query($q)->make_compiler(searchable => $searcher)
   ->highlight_spans(
    searchable => $searcher,
    field      => 'content',
    doc_vec    => $searcher->fetch_doc_vec( $hit->get_doc_id )
-  )
-};
+  );
+use Scalar::Util "blessed";
+!blessed(
+ KinoSearch::Highlight::HeatMap->new(
+        spans  => $posits,
+        window => $limit*2
+     )->get_spans
+)
 version_test
 This module requires the development version of KinoSearch, revision
-4496 or later, which can be obtained from the following URL:
+4604 or later, which can be obtained from the following URL:
 http://www.rectangular.com/svn/kinosearch/trunk
 
 
